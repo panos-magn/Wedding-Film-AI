@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Playfair Display', serif;
+  
+  --color-slate-50: var(--slate-50);
+  --color-slate-100: var(--slate-100);
+  --color-slate-200: var(--slate-200);
+  --color-slate-300: var(--slate-300);
+  --color-slate-400: var(--slate-400);
+  --color-slate-500: var(--slate-500);
+  --color-slate-600: var(--slate-600);
+  --color-slate-700: var(--slate-700);
+  --color-slate-800: var(--slate-800);
+  --color-slate-900: var(--slate-900);
+  --color-slate-950: var(--slate-950);
+}
+
+:root {
+  --slate-950: #fafaf9;
+  --slate-900: #ffffff;
+  --slate-800: #e7e5e4;
+  --slate-700: #d6d3d1;
+  --slate-600: #a8a29e;
+  --slate-500: #78716c;
+  --slate-400: #57534e;
+  --slate-300: #44403c;
+  --slate-200: #292524;
+  --slate-100: #1c1917;
+  --slate-50:  #0c0a09;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-50 font-sans transition-colors duration-300;
+  }
+}
+
+
+@layer components {
+  .glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/40 shadow-xl shadow-slate-200/50;
+  }
+  
+  .glass-dark {
+    @apply bg-white/50 backdrop-blur-xl border border-white/20 shadow-lg shadow-slate-200/40;
+  }
+  
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500;
+  }
+  
+  .sidebar-active {
+    @apply bg-gradient-to-r from-indigo-500/20 to-transparent border-l-4 border-indigo-500;
+  }
+
+  .markdown-body h1 { @apply text-2xl font-bold mb-4 mt-6; }
+  .markdown-body h2 { @apply text-xl font-bold mb-3 mt-5; }
+  .markdown-body h3 { @apply text-lg font-bold mb-2 mt-4; }
+  .markdown-body p { @apply mb-4 leading-relaxed; }
+  .markdown-body ul { @apply list-disc pl-6 mb-4; }
+  .markdown-body ol { @apply list-decimal pl-6 mb-4; }
+  .markdown-body li { @apply mb-1; }
+  .markdown-body strong { @apply font-bold text-slate-50; }
+  .markdown-body blockquote { @apply border-l-4 border-indigo-500 pl-4 italic my-4 text-slate-400; }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-800 rounded-full;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-700;
+  }
+}

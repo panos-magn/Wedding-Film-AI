@@ -1,0 +1,157 @@
+{
+  "entities": {
+    "user": {
+      "title": "UserProfile",
+      "description": "User business and brand settings",
+      "type": "object",
+      "properties": {
+        "fullName": {
+          "type": "string"
+        },
+        "businessName": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "website": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "brandColors": {
+          "type": "object",
+          "properties": {
+            "primary": { "type": "string" },
+            "secondary": { "type": "string" },
+            "accent": { "type": "string" }
+          }
+        },
+        "contractTemplate": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "admin"]
+        },
+        "subscriptionStatus": {
+          "type": "string",
+          "enum": ["active", "trialing", "past_due", "canceled", "none"]
+        },
+        "subscriptionExpiresAt": {
+          "type": "string"
+        },
+        "stripeCustomerId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fullName",
+        "email"
+      ]
+    },
+    "project": {
+      "title": "Project",
+      "description": "Wedding project content and metadata",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "coupleNames": {
+          "type": "string"
+        },
+        "weddingDate": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "style": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "contact": {
+          "type": "object"
+        },
+        "payments": {
+          "type": "object"
+        },
+        "deliverables": {
+          "type": "object"
+        },
+        "deadline": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "ownerId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "coupleNames",
+        "weddingDate",
+        "ownerId"
+      ]
+    },
+    "ai_result": {
+      "title": "AIResult",
+      "description": "Saved AI Studio generations linked to a specific wedding film project",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "moduleType": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "ownerId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId",
+        "moduleType",
+        "content",
+        "ownerId"
+      ]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "user",
+      "description": "User profiles collections"
+    },
+    "projects/{projectId}": {
+      "schema": "project",
+      "description": "Collection of wedding projects"
+    },
+    "ai_results/{resultId}": {
+      "schema": "ai_result",
+      "description": "Collection of generated and saved AI results"
+    }
+  }
+}

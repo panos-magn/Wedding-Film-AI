@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global safety net (Default Deny catch-all)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitive Definitions & Safety Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(ownerId) {
+      return isSignedIn() && request.auth.uid == ownerId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isMasterCreator() {
+      return isSignedIn() && request.auth.token.email == 'tzampasyndromi@gmail.com';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Type checking and size limit helpers
+    function isValidString(val, maxLen) {
+      return val is string && val.size() > 0 && val.size() <= maxLen;
+    }
+
+    // User Profile schema validation
+    function isValidUser(data) {
+      return data.keys().hasAll(['fullName', 'email']) 
+        && data.fullName is string && data.fullName.size() <= 100
+        && data.email is string && data.email.size() <= 150;
+    }
+
+    // Project schema validation helper
+    function isValidProject(data) {
+      return data.keys().hasAll(['coupleNames', 'weddingDate', 'ownerId'])
+        && data.coupleNames is string && data.coupleNames.size() > 0 && data.coupleNames.size() <= 200
+        && data.weddingDate is string && data.weddingDate.size() <= 100
+        && data.ownerId is string && data.ownerId == request.auth.uid;
+    }
+
+    // AI Result schema validation helper
+    function isValidAIResult(data) {
+      return data.keys().hasAll(['projectId', 'moduleType', 'content', 'ownerId'])
+        && data.projectId is string && data.projectId.size() <= 100
+        && data.moduleType is string && data.moduleType.size() <= 100
+        && data.content is string && data.content.size() <= 500000
+        && data.ownerId is string && data.ownerId == request.auth.uid;
+    }
+
+    // USERS COLLECTION RULES
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isMasterCreator());
+      
+      allow create: if isSignedIn() && request.auth.uid == userId 
+        && isValidUser(request.resource.data)
+        && (
+          isMasterCreator() 
+          || (
+            (!('role' in request.resource.data) || request.resource.data.role == 'user')
+            && (!('subscriptionStatus' in request.resource.data) || request.resource.data.subscriptionStatus in ['trialing', 'none'])
+          )
+        );
+        
+      allow update: if isSignedIn() && (
+        isAdmin() || isMasterCreator() || (
+          request.auth.uid == userId 
+          && isValidUser(request.resource.data)
+          // System properties cannot be updated by normal users (to prevent privilege/subscription fee evasion)
+          && (!('role' in request.resource.data) || (resource != null && 'role' in resource.data && request.resource.data.role == resource.data.role))
+          && (!('subscriptionStatus' in request.resource.data) || (resource != null && 'subscriptionStatus' in resource.data && request.resource.data.subscriptionStatus == resource.data.subscriptionStatus))
+          && (!('subscriptionExpiresAt' in request.resource.data) || (resource != null && 'subscriptionExpiresAt' in resource.data && request.resource.data.subscriptionExpiresAt == resource.data.subscriptionExpiresAt))
+          && (!('stripeCustomerId' in request.resource.data) || (resource != null && 'stripeCustomerId' in resource.data && request.resource.data.stripeCustomerId == resource.data.stripeCustomerId))
+        )
+      );
+      
+      allow delete: if isAdmin() || isMasterCreator();
+    }
+
+    // PROJECTS COLLECTION RULES
+    match /projects/{projectId} {
+      allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      
+      allow create: if isSignedIn() 
+        && isValidId(projectId) 
+        && isValidProject(request.resource.data)
+        && request.resource.data.ownerId == request.auth.uid;
+        
+      allow update: if isSignedIn() 
+        && isValidId(projectId) 
+        && isValidProject(request.resource.data)
+        && (resource.data.ownerId == request.auth.uid || isAdmin())
+        && request.resource.data.ownerId == resource.data.ownerId; // Immortality Rule
+        
+      allow delete: if isSignedIn() 
+        && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // AI RESULTS COLLECTION RULES
+    match /ai_results/{resultId} {
+      allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      
+      allow create: if isSignedIn() 
+        && isValidId(resultId) 
+        && isValidAIResult(request.resource.data)
+        && request.resource.data.ownerId == request.auth.uid;
+        
+      allow update: if isSignedIn() 
+        && isValidId(resultId) 
+        && isValidAIResult(request.resource.data)
+        && (resource.data.ownerId == request.auth.uid || isAdmin())
+        && request.resource.data.ownerId == resource.data.ownerId; // Immortality Rule
+        
+      allow delete: if isSignedIn() 
+        && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+  }
+}
