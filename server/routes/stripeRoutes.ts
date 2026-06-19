@@ -1,13 +1,15 @@
 import express from "express";
 import { getStripe } from "../services/stripeService";
 import { getDbAdmin } from "../services/dbAdmin";
+import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
 
 const router = express.Router();
 
 // Extract all stripe endpoints previously in server.ts
-router.post("/create-checkout-session", async (req, res) => {
+router.post("/create-checkout-session", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const { planId, userId, email, successUrl, cancelUrl } = req.body;
+    const { planId, email, successUrl, cancelUrl } = req.body;
+    const userId = req.uid;
     if (!userId || !email) {
        res.status(400).json({ error: "Missing required fields: userId and email are mandatory." });
        return;
@@ -46,6 +48,10 @@ router.post("/create-checkout-session", async (req, res) => {
     }
 
     if (!process.env.STRIPE_SECRET_KEY) {
+      if (process.env.NODE_ENV === "production") {
+        res.status(500).json({ error: "Stripe configuration is missing in production." });
+        return;
+      }
       console.log(`[Stripe Simulation] Creating mocked checkout url for: ${email}, plan: ${planId}`);
       const simulatedSessionId = `mock_session_${Date.now()}__${planId}__${userId}`;
       const finalUrl = successUrl.includes("?") 
@@ -94,18 +100,28 @@ router.post("/create-checkout-session", async (req, res) => {
   }
 });
 
-router.post("/verify-session", async (req, res) => {
+router.post("/verify-session", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const { sessionId } = req.body;
+    const requestUserId = req.uid;
     if (!sessionId) {
       res.status(400).json({ error: "Missing sessionId parameter." });
       return;
     }
 
     if (sessionId.startsWith("mock_session_")) {
+      if (process.env.NODE_ENV === "production") {
+        res.status(403).json({ error: "Mock sessions are disabled in production." });
+        return;
+      }
       const parts = sessionId.split("__");
       const planId = parts[1] || "pro";
       const userId = parts[2] || "";
+      
+      if (userId !== requestUserId) {
+        res.status(403).json({ error: "Cannot verify session for a different user." });
+        return;
+      }
       
       const expiresAt = planId.endsWith("_yearly")
         ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
@@ -145,6 +161,11 @@ router.post("/verify-session", async (req, res) => {
 
       if (!userId) {
         res.status(400).json({ error: "No userId matched in Stripe checkout metadata." });
+        return;
+      }
+
+      if (userId !== requestUserId) {
+        res.status(403).json({ error: "Cannot verify session for a different user." });
         return;
       }
 
@@ -190,11 +211,12 @@ router.post("/verify-session", async (req, res) => {
   }
 });
 
-router.post("/cancel-subscription", async (req, res) => {
+router.post("/cancel-subscription", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const { userId } = req.body;
+    const userId = req.uid;
+
     if (!userId) {
-      res.status(400).json({ error: "Missing userId parameter." });
+      res.status(401).json({ error: "Missing authentication." });
       return;
     }
 
@@ -227,11 +249,18 @@ router.post("/cancel-subscription", async (req, res) => {
   }
 });
 
-router.get("/invoices", async (req, res) => {
+router.get("/invoices", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const { userId } = req.query;
+    const userId = req.uid;
+    const requestedUserId = req.query.userId;
+    
+    if (requestedUserId && requestedUserId !== userId) {
+      res.status(403).json({ error: "Cannot access invoices of another user." });
+      return;
+    }
+
     if (!userId || typeof userId !== 'string') {
-      res.status(400).json({ error: "Missing userId parameter." });
+      res.status(401).json({ error: "Missing authentication." });
       return;
     }
 

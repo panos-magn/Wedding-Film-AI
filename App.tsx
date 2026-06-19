@@ -112,40 +112,45 @@ const App: React.FC = () => {
       window.history.replaceState({}, document.title, cleanUrl);
 
       setGlobalLoading(true);
-      fetch("/api/stripe/verify-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId }),
-      })
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error("Verification network response failed");
-          }
-          return res.json();
+      firebaseUser.getIdToken().then(token => {
+        fetch("/api/stripe/verify-session", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ sessionId }),
         })
-        .then(async (data) => {
-          if (data && data.success && data.userId === firebaseUser.uid) {
-            const updated: UserProfile = {
-              ...userProfile,
-              subscriptionStatus: data.subscriptionStatus,
-              subscriptionExpiresAt: data.subscriptionExpiresAt,
-              stripeCustomerId: data.stripeCustomerId || "",
-            };
-            handleUpdateProfile(updated);
-            showToast(
-              `Συγχαρητήρια! Η συνδρομή σας ενεργοποιήθηκε επιτυχώς${data.isSimulated ? " (Simulated)" : ""}!`,
-            );
-          } else {
-            showToast("Αποτυχία επιβεβαίωσης πληρωμής.", "error");
-          }
-        })
-        .catch((err) => {
-          console.error("Error verifying Stripe session:", err);
-          showToast("Σφάλμα κατά την επιβεβαίωση της πληρωμής.", "error");
-        })
-        .finally(() => {
-          setGlobalLoading(false);
-        });
+          .then((res) => {
+            if (!res.ok) {
+              throw new Error("Verification network response failed");
+            }
+            return res.json();
+          })
+          .then(async (data) => {
+            if (data && data.success && data.userId === firebaseUser.uid) {
+              const updated: UserProfile = {
+                ...userProfile,
+                subscriptionStatus: data.subscriptionStatus,
+                subscriptionExpiresAt: data.subscriptionExpiresAt,
+                stripeCustomerId: data.stripeCustomerId || "",
+              };
+              handleUpdateProfile(updated);
+              showToast(
+                `Συγχαρητήρια! Η συνδρομή σας ενεργοποιήθηκε επιτυχώς${data.isSimulated ? " (Simulated)" : ""}!`,
+              );
+            } else {
+              showToast("Αποτυχία επιβεβαίωσης πληρωμής.", "error");
+            }
+          })
+          .catch((err) => {
+            console.error("Error verifying Stripe session:", err);
+            showToast("Σφάλμα κατά την επιβεβαίωση της πληρωμής.", "error");
+          })
+          .finally(() => {
+            setGlobalLoading(false);
+          });
+      });
     }
   }, [firebaseUser, userProfile, handleUpdateProfile, showToast]);
 
@@ -250,11 +255,10 @@ const App: React.FC = () => {
 
   const isSubscriptionValid =
     userProfile.role === "admin" ||
-    userProfile.subscriptionStatus === "active" ||
-    userProfile.subscriptionStatus === "trialing" ||
-    (userProfile.subscriptionStatus === "canceled" &&
-      userProfile.subscriptionExpiresAt &&
-      new Date(userProfile.subscriptionExpiresAt).getTime() > Date.now());
+    ((userProfile.subscriptionStatus === "active" ||
+      userProfile.subscriptionStatus === "trialing" ||
+      userProfile.subscriptionStatus === "canceled") &&
+      (!userProfile.subscriptionExpiresAt || new Date(userProfile.subscriptionExpiresAt).getTime() > Date.now()));
 
   // 3. Unauthorized / Subscription Gate state
   if (firebaseUser && !isSubscriptionValid) {

@@ -55,14 +55,24 @@ const AIStudio: React.FC<AIStudioProps> = ({
   }, [initialProjectId, initialModuleId]);
 
   useEffect(() => {
-    fetch("/api/config-status")
-      .then((res) => res.json())
-      .then((data) => {
+    const fetchConfig = async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/config-status", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        const data = await res.json();
         if (data && typeof data.hasGeminiKey === "boolean") {
           setHasGeminiKey(data.hasGeminiKey);
         }
-      })
-      .catch((err) => console.error("Error checking key status:", err));
+      } catch (err) {
+        console.error("Error checking key status:", err);
+      }
+    };
+    fetchConfig();
   }, []);
 
   const handleGenerate = async () => {

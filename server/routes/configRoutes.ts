@@ -1,8 +1,9 @@
 import express from "express";
+import { requireAuth } from "../middleware/auth";
 
 const router = express.Router();
 
-router.get("/config-status", (req, res) => {
+router.get("/config-status", requireAuth, (req, res) => {
   const key = process.env.GEMINI_API_KEY;
   res.json({ 
     hasGeminiKey: !!key,

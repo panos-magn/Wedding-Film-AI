@@ -20,10 +20,6 @@ service cloud.firestore {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    function isMasterCreator() {
-      return isSignedIn() && request.auth.token.email == 'tzampasyndromi@gmail.com';
-    }
-
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -59,31 +55,28 @@ service cloud.firestore {
 
     // USERS COLLECTION RULES
     match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isMasterCreator());
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       
       allow create: if isSignedIn() && request.auth.uid == userId 
         && isValidUser(request.resource.data)
         && (
-          isMasterCreator() 
-          || (
-            (!('role' in request.resource.data) || request.resource.data.role == 'user')
-            && (!('subscriptionStatus' in request.resource.data) || request.resource.data.subscriptionStatus in ['trialing', 'none'])
-          )
+          (!('role' in request.resource.data) || request.resource.data.role == 'user')
+          && (!('subscriptionStatus' in request.resource.data) || request.resource.data.subscriptionStatus in ['trialing', 'none'])
         );
         
       allow update: if isSignedIn() && (
-        isAdmin() || isMasterCreator() || (
+        isAdmin() || (
           request.auth.uid == userId 
           && isValidUser(request.resource.data)
-          // System properties cannot be updated by normal users (to prevent privilege/subscription fee evasion)
-          && (!('role' in request.resource.data) || (resource != null && 'role' in resource.data && request.resource.data.role == resource.data.role))
-          && (!('subscriptionStatus' in request.resource.data) || (resource != null && 'subscriptionStatus' in resource.data && request.resource.data.subscriptionStatus == resource.data.subscriptionStatus))
-          && (!('subscriptionExpiresAt' in request.resource.data) || (resource != null && 'subscriptionExpiresAt' in resource.data && request.resource.data.subscriptionExpiresAt == resource.data.subscriptionExpiresAt))
-          && (!('stripeCustomerId' in request.resource.data) || (resource != null && 'stripeCustomerId' in resource.data && request.resource.data.stripeCustomerId == resource.data.stripeCustomerId))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'fullName', 'email', 'phone', 'website', 'address',
+            'businessName', 'brandColors', 'logoUrl', 'contractTemplate',
+            'customGeminiApiKey', 'customOpenAiApiKey', 'aiProvider'
+          ])
         )
       );
       
-      allow delete: if isAdmin() || isMasterCreator();
+      allow delete: if isAdmin();
     }
 
     // PROJECTS COLLECTION RULES

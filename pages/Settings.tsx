@@ -50,9 +50,16 @@ const Settings: React.FC<SettingsProps> = ({
   }, [profile]);
 
   useEffect(() => {
-    fetch("/api/config-status")
-      .then((res) => res.json())
-      .then((data) => {
+    const fetchConfig = async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/config-status", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        const data = await res.json();
         if (data) {
           if (typeof data.hasGeminiKey === "boolean") {
             setHasGeminiKey(data.hasGeminiKey);
@@ -64,10 +71,11 @@ const Settings: React.FC<SettingsProps> = ({
             setHasStripeKey(data.hasStripeKey);
           }
         }
-      })
-      .catch((err) =>
-        console.error("Error fetching api key status on Settings:", err),
-      );
+      } catch (err) {
+        console.error("Error fetching api key status on Settings:", err);
+      }
+    };
+    fetchConfig();
   }, []);
 
   useEffect(() => {
@@ -77,22 +85,30 @@ const Settings: React.FC<SettingsProps> = ({
       hasStripeKey
     ) {
       setLoadingInvoices(true);
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        fetch(
-          `/api/stripe/invoices?userId=${currentUser.uid}&stripeCustomerId=${localProfile.stripeCustomerId || ""}`,
-        )
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.invoices) {
-              setInvoices(data.invoices);
+      const fetchInvoices = async () => {
+        try {
+          const currentUser = auth.currentUser;
+          if (!currentUser) throw new Error("No user");
+          const token = await currentUser.getIdToken();
+          const res = await fetch(
+            `/api/stripe/invoices?userId=${currentUser.uid}&stripeCustomerId=${localProfile.stripeCustomerId || ""}`,
+            {
+              headers: {
+                "Authorization": `Bearer ${token}`
+              }
             }
-          })
-          .catch((err) => console.error("Error fetching invoices:", err))
-          .finally(() => setLoadingInvoices(false));
-      } else {
-        setLoadingInvoices(false);
-      }
+          );
+          const data = await res.json();
+          if (data.invoices) {
+            setInvoices(data.invoices);
+          }
+        } catch (err) {
+          console.error("Error fetching invoices:", err);
+        } finally {
+          setLoadingInvoices(false);
+        }
+      };
+      fetchInvoices();
     }
   }, [activeTab, localProfile.stripeCustomerId, hasStripeKey]);
 
@@ -103,10 +119,15 @@ const Settings: React.FC<SettingsProps> = ({
       if (!currentUser) {
         throw new Error("Δεν βρέθηκε συνδεδεμένος χρήστης.");
       }
+      
+      const token = await currentUser.getIdToken();
 
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           planId,
           userId: currentUser.uid,
@@ -148,10 +169,15 @@ const Settings: React.FC<SettingsProps> = ({
       if (!currentUser) {
         throw new Error("Δεν βρέθηκε συνδεδεμένος χρήστης.");
       }
+      
+      const token = await currentUser.getIdToken();
 
       const response = await fetch("/api/stripe/cancel-subscription", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           userId: currentUser.uid,
           stripeCustomerId: localProfile.stripeCustomerId,

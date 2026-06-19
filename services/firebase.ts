@@ -123,16 +123,9 @@ export async function saveUserProfile(userId: string, profile: UserProfile): Pro
 export async function ensureUserProfileOrCreateDefault(firebaseUser: FirebaseUser): Promise<UserProfile> {
   const existing = await getUserProfile(firebaseUser.uid);
   if (existing) {
-    // If the email is the user's primary email, ensure they have the 'admin' role if not already set
-    if (firebaseUser.email === 'tzampasyndromi@gmail.com' && existing.role !== 'admin') {
-      const updated = { ...existing, role: 'admin' as const };
-      await saveUserProfile(firebaseUser.uid, updated);
-      return updated;
-    }
     return existing;
   }
   
-  const isCreatorAdmin = firebaseUser.email === 'tzampasyndromi@gmail.com';
   const defaultProfile: UserProfile = {
     fullName: firebaseUser.displayName || 'Καινούριος Χρήστης',
     businessName: 'My Motion Picture Studio',
@@ -142,10 +135,10 @@ export async function ensureUserProfileOrCreateDefault(firebaseUser: FirebaseUse
     address: '',
     brandColors: { primary: '#6366f1', secondary: '#a855f7', accent: '#ec4899' },
     contractTemplate: 'Το προεπιλεγμένο κείμενο συμβολαίου βιντεοσκόπησης γάμου πηγαίνει εδώ...',
-    role: isCreatorAdmin ? 'admin' : 'user',
-    subscriptionStatus: isCreatorAdmin ? 'active' : 'trialing',
+    role: 'user',
+    subscriptionStatus: 'trialing',
     subscriptionExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-    subscriptionPlan: isCreatorAdmin ? 'pro' : 'free_trial',
+    subscriptionPlan: 'free_trial',
     aiCreditsUsed: 0,
     lastCreditsResetMonth: '',
     stripeCustomerId: ''

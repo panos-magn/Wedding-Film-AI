@@ -1,4 +1,5 @@
 import { Project, AIModuleConfig } from "../types";
+import { auth } from "./firebase";
 
 export interface AIGenerationResponse {
   text: string;
@@ -16,10 +17,17 @@ export async function generateAIContent(
   aiProvider?: "gemini" | "openai"
 ): Promise<AIGenerationResponse> {
   try {
+    const token = await auth.currentUser?.getIdToken();
+    
+    if (!token) {
+      throw new Error("Authentication required");
+    }
+
     const response = await fetch("/api/generate", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
       },
       body: JSON.stringify({
         config,

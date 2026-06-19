@@ -27,16 +27,24 @@ const SubscriptionGate: React.FC<SubscriptionGateProps> = ({
   const [billingInterval, setBillingInterval] = React.useState<"monthly" | "yearly">("monthly");
 
   React.useEffect(() => {
-    fetch("/api/config-status")
-      .then((res) => res.json())
-      .then((data) => {
+    const fetchConfig = async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/config-status", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        const data = await res.json();
         if (data && typeof data.hasStripeKey === "boolean") {
           setHasStripeKey(data.hasStripeKey);
         }
-      })
-      .catch((err) =>
-        console.error("Error fetching stripe config status on Paywall:", err),
-      );
+      } catch (err) {
+        console.error("Error fetching stripe config status on Paywall:", err);
+      }
+    };
+    fetchConfig();
   }, []);
 
   const plans = [
@@ -113,9 +121,14 @@ const SubscriptionGate: React.FC<SubscriptionGateProps> = ({
         throw new Error("Δεν βρέθηκε συνδεδεμένος χρήστης.");
       }
 
+      const token = await currentUser.getIdToken();
+
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           planId,
           userId: currentUser.uid,
