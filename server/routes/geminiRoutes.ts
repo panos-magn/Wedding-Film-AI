@@ -31,7 +31,9 @@ router.post("/generate", requireAuth, async (req: AuthenticatedRequest, res) => 
           return;
         }
       } catch (err) {
-        console.warn("Failed to fetch project securely, trusting client payload:", err);
+        console.error("Failed to fetch project securely:", err);
+        res.status(503).json({ error: "Unable to verify project ownership, please try again." });
+        return;
       }
     }
 
@@ -58,7 +60,9 @@ router.post("/generate", requireAuth, async (req: AuthenticatedRequest, res) => 
         lastCreditsResetMonth = userData?.lastCreditsResetMonth || "";
       }
     } catch (err) {
-      console.warn("Failed to fetch user securely from Admin SDK, defaulting to limited access:", err);
+      console.error("Failed to fetch user securely from Admin SDK:", err);
+      res.status(503).json({ error: "Unable to verify user subscription, please try again." });
+      return;
     }
 
     if (subscriptionStatus === "active" && subscriptionExpiresAt) {

@@ -106,17 +106,20 @@ async function startServer() {
   });
 
   // Apply Helmet for basic security controls
+  const isProd = process.env.NODE_ENV === "production";
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://apis.google.com"],
+        scriptSrc: isProd 
+          ? ["'self'", "https://apis.google.com"]
+          : ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://apis.google.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
         frameSrc: ["'self'", "https://apis.google.com", "https://js.stripe.com"],
         connectSrc: ["'self'", "https://api.stripe.com", "https://firestore.googleapis.com", "https://securetoken.googleapis.com", "https://identitytoolkit.googleapis.com", "ws:", "wss:"],
         imgSrc: ["'self'", "data:", "https:"],
-        frameAncestors: ["'self'", "https://ai.studio", "https://*.google.com", "https://*.googleusercontent.com"],
+        frameAncestors: ["'self'", "https://aistudio.google.com", "https://ai.studio", "https://alkali-makersuite-dev.sandbox.google.com"],
       },
     },
     xFrameOptions: false,
@@ -158,6 +161,7 @@ async function startServer() {
         const dbAdmin = getDbAdmin();
         const lockRef = dbAdmin.collection("config").doc("syncLock");
         
+        let shouldSync = false;
         await dbAdmin.runTransaction(async (t) => {
           const lockDoc = await t.get(lockRef);
           const now = Date.now();
@@ -165,50 +169,59 @@ async function startServer() {
             const data = lockDoc.data();
             // If locked within the last hour, skip to avoid double sync
             if (data?.lockedAt && now - data.lockedAt < 60 * 60 * 1000) {
-              console.log("[Daily Sync] Another instance is already syncing, skipping.");
               return;
             }
           }
           t.set(lockRef, { lockedAt: now });
+          shouldSync = true;
         });
 
+        if (!shouldSync) {
+          console.log("[Daily Sync] Another instance is already syncing, skipping.");
+          return;
+        }
+
         console.log("[Daily Sync] Acquired lock. Starting subscription sync...");
-        const stripe = getStripe();
-        const usersSnapshot = await dbAdmin.collection("users").where("subscriptionStatus", "in", ["active", "trialing", "past_due"]).get();
-        
-        for (const doc of usersSnapshot.docs) {
-          const data = doc.data();
-          if (data.stripeCustomerId && process.env.STRIPE_SECRET_KEY) {
-            try {
-              const subscriptions = await stripe.subscriptions.list({
-                customer: data.stripeCustomerId,
-                limit: 1,
-                status: 'all'
-              });
-              
-              if (subscriptions.data.length > 0) {
-                const sub = subscriptions.data[0];
-                const status = sub.status === 'active' || sub.status === 'trialing' ? 'active' :
-                               sub.status === 'past_due' || sub.status === 'unpaid' ? 'past_due' : 'canceled';
-                
-                await doc.ref.update({
-                  subscriptionStatus: status,
-                  subscriptionExpiresAt: new Date(sub.current_period_end * 1000).toISOString(),
+        try {
+          const stripe = getStripe();
+          const usersSnapshot = await dbAdmin.collection("users").where("subscriptionStatus", "in", ["active", "trialing", "past_due"]).get();
+          
+          for (const doc of usersSnapshot.docs) {
+            const data = doc.data();
+            if (data.stripeCustomerId && process.env.STRIPE_SECRET_KEY) {
+              try {
+                const subscriptions = await stripe.subscriptions.list({
+                  customer: data.stripeCustomerId,
+                  limit: 1,
+                  status: 'all'
                 });
-              } else {
-                // If they have no subscriptions in Stripe but are marked active locally
-                if (data.subscriptionPlan !== "lifetime") {
-                   await doc.ref.update({
-                     subscriptionStatus: 'canceled'
-                   });
+                
+                if (subscriptions.data.length > 0) {
+                  const sub = subscriptions.data[0];
+                  const status = sub.status === 'active' || sub.status === 'trialing' ? 'active' :
+                                 sub.status === 'past_due' || sub.status === 'unpaid' ? 'past_due' : 'canceled';
+                  
+                  await doc.ref.update({
+                    subscriptionStatus: status,
+                    subscriptionExpiresAt: new Date(sub.current_period_end * 1000).toISOString(),
+                  });
+                } else {
+                  // If they have no subscriptions in Stripe but are marked active locally
+                  if (data.subscriptionPlan !== "lifetime") {
+                     await doc.ref.update({
+                       subscriptionStatus: 'canceled'
+                     });
+                  }
                 }
+              } catch (err) {
+                console.error(`[Daily Sync] Failed to sync user ${doc.id}:`, err);
               }
-            } catch (err) {
-              console.error(`[Daily Sync] Failed to sync user ${doc.id}:`, err);
             }
           }
+          console.log("[Daily Sync] Sync complete.");
+        } finally {
+          await lockRef.set({ lockedAt: 0 });
         }
-        console.log("[Daily Sync] Sync complete.");
       } catch (err) {
         console.error("[Daily Sync] Error during daily sync:", err);
       }
