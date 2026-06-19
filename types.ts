@@ -71,8 +71,13 @@ export interface UserProfile {
   role?: 'user' | 'admin';
   subscriptionStatus?: 'active' | 'trialing' | 'past_due' | 'canceled' | 'none';
   subscriptionExpiresAt?: string;
+  subscriptionPlan?: string;
+  aiCreditsUsed?: number;
+  lastCreditsResetMonth?: string;
   stripeCustomerId?: string;
   customGeminiApiKey?: string;
+  customOpenAiApiKey?: string;
+  aiProvider?: 'gemini' | 'openai';
 }
 
 export type AIModuleType = 

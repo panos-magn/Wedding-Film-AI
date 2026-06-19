@@ -145,6 +145,9 @@ export async function ensureUserProfileOrCreateDefault(firebaseUser: FirebaseUse
     role: isCreatorAdmin ? 'admin' : 'user',
     subscriptionStatus: isCreatorAdmin ? 'active' : 'trialing',
     subscriptionExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    subscriptionPlan: isCreatorAdmin ? 'pro' : 'free_trial',
+    aiCreditsUsed: 0,
+    lastCreditsResetMonth: '',
     stripeCustomerId: ''
   };
   await saveUserProfile(firebaseUser.uid, defaultProfile);
