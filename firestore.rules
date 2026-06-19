@@ -71,7 +71,7 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'fullName', 'email', 'phone', 'website', 'address',
             'businessName', 'brandColors', 'logoUrl', 'contractTemplate',
-            'customGeminiApiKey', 'customOpenAiApiKey', 'aiProvider'
+            'aiProvider'
           ])
         )
       );

@@ -75,8 +75,6 @@ export interface UserProfile {
   aiCreditsUsed?: number;
   lastCreditsResetMonth?: string;
   stripeCustomerId?: string;
-  customGeminiApiKey?: string;
-  customOpenAiApiKey?: string;
   aiProvider?: 'gemini' | 'openai';
 }
 

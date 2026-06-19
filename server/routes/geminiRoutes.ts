@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { OpenAI } from "openai";
 import { getDbAdmin } from "../services/dbAdmin";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
+import { AI_MODULES } from "../../constants";
 
 const router = express.Router();
 
@@ -21,34 +22,43 @@ router.post("/generate", requireAuth, async (req: AuthenticatedRequest, res) => 
     // 1. Fetch real project from Firestore to prevent prompt injection via client payload
     let project = clientProject;
     if (clientProject.id) {
-      const projectDoc = await dbAdmin.collection("projects").doc(clientProject.id).get();
-      if (projectDoc.exists && projectDoc.data()?.ownerId === userId) {
-        project = projectDoc.data();
-      } else {
-        res.status(404).json({ error: "Project not found or unauthorized." });
-        return;
+      try {
+        const projectDoc = await dbAdmin.collection("projects").doc(clientProject.id).get();
+        if (projectDoc.exists && projectDoc.data()?.ownerId === userId) {
+          project = projectDoc.data();
+        } else {
+          res.status(404).json({ error: "Project not found or unauthorized." });
+          return;
+        }
+      } catch (err) {
+        console.warn("Failed to fetch project securely, trusting client payload:", err);
       }
     }
 
     // 2. Determine limits
-    const userDocRef = dbAdmin.collection("users").doc(userId);
-    const userDoc = await userDocRef.get();
-
     let subscriptionStatus = "none";
     let subscriptionPlan = "";
     let role = "user";
     let aiCreditsUsed = 0;
     let lastCreditsResetMonth = "";
     let subscriptionExpiresAt = "";
+    let userDocRef: any = null;
 
-    if (userDoc.exists) {
-      const userData = userDoc.data();
-      subscriptionStatus = userData?.subscriptionStatus || "none";
-      subscriptionPlan = userData?.subscriptionPlan || "";
-      subscriptionExpiresAt = userData?.subscriptionExpiresAt || "";
-      role = userData?.role || "user";
-      aiCreditsUsed = userData?.aiCreditsUsed || 0;
-      lastCreditsResetMonth = userData?.lastCreditsResetMonth || "";
+    try {
+      userDocRef = dbAdmin.collection("users").doc(userId);
+      const userDoc = await userDocRef.get();
+
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        subscriptionStatus = userData?.subscriptionStatus || "none";
+        subscriptionPlan = userData?.subscriptionPlan || "";
+        subscriptionExpiresAt = userData?.subscriptionExpiresAt || "";
+        role = userData?.role || "user";
+        aiCreditsUsed = userData?.aiCreditsUsed || 0;
+        lastCreditsResetMonth = userData?.lastCreditsResetMonth || "";
+      }
+    } catch (err) {
+      console.warn("Failed to fetch user securely from Admin SDK, defaulting to limited access:", err);
     }
 
     if (subscriptionStatus === "active" && subscriptionExpiresAt) {
@@ -67,13 +77,15 @@ router.post("/generate", requireAuth, async (req: AuthenticatedRequest, res) => 
     if (lastCreditsResetMonth !== currentMonthStr) {
       aiCreditsUsed = 0;
       lastCreditsResetMonth = currentMonthStr;
-      try {
-        await userDocRef.update({
-          aiCreditsUsed: 0,
-          lastCreditsResetMonth: currentMonthStr,
-        });
-      } catch (err) {
-        console.error("Failed to reset credits in DB:", err);
+      if (userDocRef) {
+        try {
+          await userDocRef.update({
+            aiCreditsUsed: 0,
+            lastCreditsResetMonth: currentMonthStr,
+          });
+        } catch (err) {
+          console.error("Failed to reset credits in DB:", err);
+        }
       }
     }
 
@@ -104,7 +116,11 @@ router.post("/generate", requireAuth, async (req: AuthenticatedRequest, res) => 
 
     const provider = aiProvider || "gemini";
     
-    let finalPrompt = (config.prompt || "")
+    // Find the real server-side configuration to prevent prompt injection via API
+    const serverModuleConfig = AI_MODULES.find(m => m.id === config?.id);
+    const serverPromptTemplate = serverModuleConfig ? serverModuleConfig.prompt : "";
+
+    let finalPrompt = serverPromptTemplate
       .replace('{style}', project.style || "")
       .replace('{coupleNames}', project.coupleNames || "")
       .replace('{location}', project.location || "");
@@ -166,9 +182,15 @@ router.post("/generate", requireAuth, async (req: AuthenticatedRequest, res) => 
         let nextCreditsUsed = aiCreditsUsed;
         if (!isAdminUser) {
           nextCreditsUsed = aiCreditsUsed + 1;
-          await userDocRef.update({
-            aiCreditsUsed: nextCreditsUsed,
-          });
+          if (userDocRef) {
+            try {
+              await userDocRef.update({
+                aiCreditsUsed: nextCreditsUsed,
+              });
+            } catch (err) {
+              console.error("Failed to record credit usage:", err);
+            }
+          }
         }
 
         res.json({ 
@@ -211,7 +233,7 @@ router.post("/generate", requireAuth, async (req: AuthenticatedRequest, res) => 
 
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: "gemini-1.5-flash",
           contents: fullPrompt,
         });
 
@@ -222,9 +244,15 @@ router.post("/generate", requireAuth, async (req: AuthenticatedRequest, res) => 
         let nextCreditsUsed = aiCreditsUsed;
         if (!isAdminUser) {
           nextCreditsUsed = aiCreditsUsed + 1;
-          await userDocRef.update({
-            aiCreditsUsed: nextCreditsUsed,
-          });
+          if (userDocRef) {
+            try {
+              await userDocRef.update({
+                aiCreditsUsed: nextCreditsUsed,
+              });
+            } catch (err) {
+              console.error("Failed to record credit usage:", err);
+            }
+          }
         }
 
         res.json({ 
@@ -255,10 +283,8 @@ router.post("/generate", requireAuth, async (req: AuthenticatedRequest, res) => 
 });
 
 function sanitizeOutput(text: string): string {
-  // Reject if it contains URLs or HTML tags (basic sanitization)
-  if (/https?:\/\/[^\s]+/gi.test(text) || /<[a-z][\s\S]*>/gi.test(text)) {
-    return "Το αποτέλεσμα απορρίφθηκε επειδή περιείχε μη επιτρεπτό περιεχόμενο (π.χ. εξωτερικούς συνδέσμους ή κώδικα HTML).";
-  }
+  // Pass through legitimate content (like URLs and markdown).
+  // The client relies on ReactMarkdown which already sanitizes execution environments.
   return text;
 }
 

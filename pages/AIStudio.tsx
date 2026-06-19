@@ -85,8 +85,6 @@ const AIStudio: React.FC<AIStudioProps> = ({
         selectedProject,
         inputs,
         auth.currentUser?.uid || "",
-        userProfile?.customGeminiApiKey,
-        userProfile?.customOpenAiApiKey,
         userProfile?.aiProvider,
       );
       setResult(output.text);

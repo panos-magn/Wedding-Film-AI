@@ -169,26 +169,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSimulateActiveSubscription = async () => {
-    if (!firebaseUser) return;
-    setGlobalLoading(true);
-    try {
-      const updated: UserProfile = {
-        ...userProfile,
-        subscriptionStatus: "active",
-        subscriptionExpiresAt: new Date(
-          Date.now() + 30 * 24 * 60 * 60 * 1000,
-        ).toISOString(),
-      };
-      await handleUpdateProfile(updated);
-      showToast("Η συνδρομή σας ενεργοποιήθηκε επιτυχώς (Προσομοίωση Stripe)!");
-    } catch (error) {
-      showToast("Αποτυχία ενεργοποίησης συνδρομής.", "error");
-    } finally {
-      setGlobalLoading(false);
-    }
-  };
-
   const navigateToProject = (id: string) => {
     setSelectedProjectId(id);
     setActiveTab("projects");
@@ -255,10 +235,9 @@ const App: React.FC = () => {
 
   const isSubscriptionValid =
     userProfile.role === "admin" ||
-    ((userProfile.subscriptionStatus === "active" ||
-      userProfile.subscriptionStatus === "trialing" ||
-      userProfile.subscriptionStatus === "canceled") &&
-      (!userProfile.subscriptionExpiresAt || new Date(userProfile.subscriptionExpiresAt).getTime() > Date.now()));
+    (["active", "trialing", "canceled"].includes(userProfile.subscriptionStatus || "") &&
+     !!userProfile.subscriptionExpiresAt &&
+     new Date(userProfile.subscriptionExpiresAt).getTime() > Date.now());
 
   // 3. Unauthorized / Subscription Gate state
   if (firebaseUser && !isSubscriptionValid) {
@@ -266,7 +245,6 @@ const App: React.FC = () => {
       <React.Fragment>
         <SubscriptionGate
           userEmail={firebaseUser.email || ""}
-          onRefreshSubscription={handleSimulateActiveSubscription}
           onLogout={handleLogout}
         />
         {/* Toast Notification */}

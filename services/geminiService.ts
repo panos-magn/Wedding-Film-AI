@@ -12,8 +12,6 @@ export async function generateAIContent(
   project: Project,
   userInputs: Record<string, string>,
   userId: string,
-  customGeminiApiKey?: string,
-  customOpenAiApiKey?: string,
   aiProvider?: "gemini" | "openai"
 ): Promise<AIGenerationResponse> {
   try {
@@ -34,8 +32,6 @@ export async function generateAIContent(
         project,
         userInputs,
         userId,
-        customGeminiApiKey,
-        customOpenAiApiKey,
         aiProvider,
       }),
     });

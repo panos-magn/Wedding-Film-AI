@@ -44,7 +44,7 @@ export const ProjectSelector: React.FC<ProjectSelectorProps> = ({
       </div>
 
       {userProfile.role === "admin" ? (
-        hasGeminiKey || userProfile.customGeminiApiKey ? (
+        hasGeminiKey ? (
           <div className="flex items-center gap-3 p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
             <Check size={16} /> Λειτουργία: Admin (Σύνδεση με Gemini AI)
           </div>
@@ -54,11 +54,6 @@ export const ProjectSelector: React.FC<ProjectSelectorProps> = ({
             Please configure it in your Settings.
           </div>
         )
-      ) : userProfile.customGeminiApiKey ? (
-        <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
-          <Check size={16} /> Λειτουργία: Premium Gemini AI (Χρήση προσωπικού
-          σας κλειδιού)
-        </div>
       ) : (
         <div className="flex flex-col gap-2 p-5 rounded-[2rem] bg-indigo-500/5 border border-indigo-500/20 text-slate-300">
           <div className="flex items-center gap-3 text-indigo-400 text-[10px] font-bold uppercase tracking-widest">

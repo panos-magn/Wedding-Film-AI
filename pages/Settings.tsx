@@ -91,7 +91,7 @@ const Settings: React.FC<SettingsProps> = ({
           if (!currentUser) throw new Error("No user");
           const token = await currentUser.getIdToken();
           const res = await fetch(
-            `/api/stripe/invoices?userId=${currentUser.uid}&stripeCustomerId=${localProfile.stripeCustomerId || ""}`,
+            `/api/stripe/invoices?userId=${currentUser.uid}`,
             {
               headers: {
                 "Authorization": `Bearer ${token}`

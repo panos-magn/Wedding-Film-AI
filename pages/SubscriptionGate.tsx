@@ -13,13 +13,11 @@ import { logoutUser, auth } from "../services/firebase";
 
 interface SubscriptionGateProps {
   userEmail: string;
-  onRefreshSubscription: () => void;
   onLogout: () => void;
 }
 
 const SubscriptionGate: React.FC<SubscriptionGateProps> = ({
   userEmail,
-  onRefreshSubscription,
   onLogout,
 }) => {
   const [loadingPlan, setLoadingPlan] = React.useState<string | null>(null);

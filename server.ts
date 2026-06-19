@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import helmet from "helmet";
+import cron from "node-cron";
 import rateLimit from "express-rate-limit";
 import { getDbAdmin } from "./server/services/dbAdmin";
 import { getStripe } from "./server/services/stripeService";
@@ -11,6 +12,7 @@ import configRoutes from "./server/routes/configRoutes";
 
 async function startServer() {
   const app = express();
+  app.set("trust proxy", 1);
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   // --- PRODUCTION STRIPE WEBHOOKS ---
@@ -105,7 +107,19 @@ async function startServer() {
 
   // Apply Helmet for basic security controls
   app.use(helmet({
-    contentSecurityPolicy: false, // Don't break inline scripts/styles for React
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://apis.google.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+        frameSrc: ["'self'", "https://apis.google.com", "https://js.stripe.com"],
+        connectSrc: ["'self'", "https://api.stripe.com", "https://firestore.googleapis.com", "https://securetoken.googleapis.com", "https://identitytoolkit.googleapis.com", "ws:", "wss:"],
+        imgSrc: ["'self'", "data:", "https:"],
+        frameAncestors: ["'self'", "https://ai.studio", "https://*.google.com", "https://*.googleusercontent.com"],
+      },
+    },
+    xFrameOptions: false,
   }));
 
   // Body parser limit expanded
@@ -116,7 +130,7 @@ async function startServer() {
   const generateLimiter = rateLimit({ windowMs: 60_000, max: 10 });
 
   app.use("/api/stripe", apiLimiter, stripeRoutes);
-  app.use("/api/generate", generateLimiter);
+  geminiRoutes.use("/generate", generateLimiter);
   app.use("/api", apiLimiter, geminiRoutes);
   app.use("/api", apiLimiter, configRoutes);
 
@@ -138,11 +152,27 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[WeddingFilmAI Studio] Server listening on http://0.0.0.0:${PORT}`);
     
-    // Daily belt-and-suspenders sync for subscriptions
-    setInterval(async () => {
+    // Daily belt-and-suspenders sync for subscriptions at midnight
+    cron.schedule("0 0 * * *", async () => {
       try {
-        console.log("[Daily Sync] Starting subscription sync...");
         const dbAdmin = getDbAdmin();
+        const lockRef = dbAdmin.collection("config").doc("syncLock");
+        
+        await dbAdmin.runTransaction(async (t) => {
+          const lockDoc = await t.get(lockRef);
+          const now = Date.now();
+          if (lockDoc.exists) {
+            const data = lockDoc.data();
+            // If locked within the last hour, skip to avoid double sync
+            if (data?.lockedAt && now - data.lockedAt < 60 * 60 * 1000) {
+              console.log("[Daily Sync] Another instance is already syncing, skipping.");
+              return;
+            }
+          }
+          t.set(lockRef, { lockedAt: now });
+        });
+
+        console.log("[Daily Sync] Acquired lock. Starting subscription sync...");
         const stripe = getStripe();
         const usersSnapshot = await dbAdmin.collection("users").where("subscriptionStatus", "in", ["active", "trialing", "past_due"]).get();
         
@@ -182,7 +212,7 @@ async function startServer() {
       } catch (err) {
         console.error("[Daily Sync] Error during daily sync:", err);
       }
-    }, 24 * 60 * 60 * 1000); // Every 24 hours
+    });
   });
 }
 
